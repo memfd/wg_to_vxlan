@@ -1,0 +1,34 @@
+---
+- name: Install WireGuard tools and host networking utilities
+  ansible.builtin.dnf:
+    name:
+      - wireguard-tools
+      - iproute
+      - policycoreutils
+    state: present
+
+- name: Prepare the local identity and return its public key
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - "{{ lookup('ansible.builtin.file', role_path ~ '/files/transport.py') }}"
+      - "{{ 'identity-plan' if ansible_check_mode else 'identity' }}"
+    stdin: >-
+      {{ {'interface': fabric_wg_interface, 'local': fabric_wg_address, 'peer': fabric_peer_wg_address,
+          'endpoint': fabric_peer_public_ipv4, 'uplink': fabric_public_interface,
+          'port': fabric_wg_port, 'mtu': fabric_wg_mtu} | to_json }}
+  register: _fabric_identity
+  check_mode: false
+  changed_when: _fabric_identity.rc == 0 and (_fabric_identity.stdout | from_json).changed
+  failed_when: false
+  no_log: true
+
+- name: Report a host identity conflict
+  ansible.builtin.fail:
+    msg: "{{ (_fabric_identity.stdout | from_json).error if (_fabric_identity.stdout | default('')) is match('^\\{') else 'Could not read the host identity.' }}"
+  when: _fabric_identity.rc != 0
+
+- name: Share the public key with the other endpoint
+  ansible.builtin.set_fact:
+    fabric_local_public_key: "{{ (_fabric_identity.stdout | from_json).public_key }}"

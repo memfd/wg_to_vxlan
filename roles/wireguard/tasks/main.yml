@@ -1,0 +1,63 @@
+---
+- name: Require both identities before configuring a live endpoint
+  ansible.builtin.assert:
+    that:
+      - ansible_check_mode or fabric_local_public_key | default('') | length > 0
+      - ansible_check_mode or fabric_peer_public_key | default('') | length > 0
+
+- name: Configure the dedicated tunnel using both public identities
+  when:
+    - fabric_local_public_key | default('') | length > 0
+    - fabric_peer_public_key | default('') | length > 0
+  block:
+    - name: Build the public transport request
+      ansible.builtin.set_fact:
+        _fabric_transport_request:
+          interface: "{{ fabric_wg_interface }}"
+          local: "{{ fabric_wg_address }}"
+          peer: "{{ fabric_peer_wg_address }}"
+          endpoint: "{{ fabric_peer_public_ipv4 }}"
+          uplink: "{{ fabric_public_interface }}"
+          port: "{{ fabric_wg_port }}"
+          mtu: "{{ fabric_wg_mtu }}"
+          peer_key: "{{ fabric_peer_public_key }}"
+
+    - name: Inspect or write the owned WireGuard configuration
+      ansible.builtin.include_tasks: run.yml
+      vars:
+        _fabric_transport_action: "{{ 'configure-plan' if ansible_check_mode else 'configure' }}"
+
+    - name: Activate the prepared profile and verify its live state
+      when: not ansible_check_mode
+      block:
+        - name: Start the dedicated WireGuard unit
+          ansible.builtin.systemd_service:
+            name: "wg-quick@{{ fabric_wg_interface }}.service"
+            state: started
+          register: _fabric_wg_start
+
+        - name: Verify the running peer and route
+          ansible.builtin.include_tasks: run.yml
+          vars:
+            _fabric_transport_action: verify
+
+        - name: Enable the verified WireGuard profile at boot
+          ansible.builtin.systemd_service:
+            name: "wg-quick@{{ fabric_wg_interface }}.service"
+            enabled: true
+
+      rescue:
+        - name: Return a tunnel started by this run to its inactive state
+          ansible.builtin.systemd_service:
+            name: "wg-quick@{{ fabric_wg_interface }}.service"
+            state: stopped
+          when:
+            - _fabric_wg_start is defined
+            - _fabric_wg_start is succeeded
+            - _fabric_wg_start.changed | default(false)
+
+        - name: Report tunnel activation or verification failure
+          ansible.builtin.fail:
+            msg: >-
+              WireGuard activation failed. Inspect the preceding task and the journal for
+              wg-quick@{{ fabric_wg_interface }}.service. The prepared files are available for retry.

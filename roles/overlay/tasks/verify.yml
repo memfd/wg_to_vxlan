@@ -1,0 +1,23 @@
+---
+- name: Assemble expected VXLAN configuration
+  ansible.builtin.include_tasks: config.yml
+
+- name: Verify local point-to-point VXLAN state
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - "{{ lookup('ansible.builtin.file', role_path ~ '/files/overlay.py') }}"
+      - verify
+      - '-'
+    stdin: "{{ _fabric_overlay | to_json }}"
+  register: _fabric_overlay_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Report the local overlay status
+  ansible.builtin.assert:
+    that: _fabric_overlay_status.rc == 0
+    fail_msg: "{{ _fabric_overlay_status.stderr | default('Could not inspect the overlay') }}"

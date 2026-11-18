@@ -1,0 +1,22 @@
+---
+- name: Run the host-local WireGuard helper
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - "{{ lookup('ansible.builtin.file', role_path ~ '/files/transport.py') }}"
+      - "{{ _fabric_transport_action }}"
+    stdin: "{{ _fabric_transport_request | to_json }}"
+  register: _fabric_transport
+  changed_when: >-
+    _fabric_transport.rc == 0 and
+    ((_fabric_transport.stdout | from_json).changed or
+     (_fabric_transport_action == 'configure-plan' and not (_fabric_transport.stdout | from_json).running))
+  failed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Report a transport configuration conflict
+  ansible.builtin.fail:
+    msg: "{{ (_fabric_transport.stdout | from_json).error if (_fabric_transport.stdout | default('')) is match('^\\{') else 'Could not execute WireGuard inspection.' }}"
+  when: _fabric_transport.rc != 0

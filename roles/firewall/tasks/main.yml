@@ -1,0 +1,22 @@
+---
+- name: Converge permanent and runtime grants for the selected peer
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - "{{ lookup('ansible.builtin.file', role_path ~ '/files/scoped_rules.py') }}"
+      - "{{ _fabric_firewall_operation | default('plan' if ansible_check_mode else 'apply') }}"
+    stdin: "{{ _fabric_firewall | to_json }}"
+  vars:
+    _fabric_firewall:
+      uplink: "{{ fabric_public_interface }}"
+      wg: "{{ fabric_wg_interface }}"
+      public: "{{ fabric_public_ipv4 }}"
+      remote_public: "{{ fabric_peer_public_ipv4 }}"
+      tunnel: "{{ fabric_wg_address }}"
+      remote_tunnel: "{{ fabric_peer_wg_address }}"
+      wg_port: "{{ fabric_wg_port }}"
+      vxlan_port: "{{ fabric_vxlan_port }}"
+  register: _fabric_fw
+  changed_when: _fabric_fw.rc == 0 and (_fabric_fw.stdout | from_json).changed
+  check_mode: false

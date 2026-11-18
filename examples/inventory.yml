@@ -1,0 +1,23 @@
+---
+all:
+  children:
+    ovirt_fabric:
+      vars:
+        ansible_user: root
+        fabric_wg_port: 51820
+        fabric_vni: 1000
+        fabric_wg_mtu: 1440
+        fabric_inner_mtu: 1390
+      hosts:
+        edge_a:
+          ansible_host: 192.0.2.10
+          fabric_public_ipv4: 192.0.2.10
+          fabric_public_interface: enp1s0
+          fabric_wg_address: 10.200.0.1
+          fabric_bridge: guestlan
+        edge_b:
+          ansible_host: 198.51.100.20
+          fabric_public_ipv4: 198.51.100.20
+          fabric_public_interface: enp2s0
+          fabric_wg_address: 10.200.0.2
+          fabric_bridge: guestlan

@@ -1,0 +1,28 @@
+---
+- name: Assemble candidate VXLAN configuration
+  ansible.builtin.include_tasks: config.yml
+
+- name: Check the existing bridge and interface identity
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - "{{ lookup('ansible.builtin.file', role_path ~ '/files/overlay.py') }}"
+      - plan
+      - '-'
+    stdin: "{{ _fabric_overlay | to_json }}"
+  register: _fabric_overlay_plan
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Report the preflight result
+  ansible.builtin.assert:
+    that: _fabric_overlay_plan.rc == 0
+    fail_msg: "{{ _fabric_overlay_plan.stderr | default('Could not execute the bridge preflight') }}"
+
+- name: Check for conflicting files and unit overrides
+  ansible.builtin.include_tasks: assets.yml
+  vars:
+    _fabric_asset_action: check-assets

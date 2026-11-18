@@ -1,0 +1,39 @@
+---
+- name: Join two oVirt logical networks across an IPv4 routed path
+  hosts: ovirt_fabric
+  become: true
+  gather_facts: true
+  strategy: linear
+  any_errors_fatal: true
+  tasks:
+    - name: Validate pair
+      ansible.builtin.import_role:
+        name: wg_to_vxlan.ovirt_l2.preflight
+        public: true
+    - name: Check the bridge attachment on both hosts before setup
+      ansible.builtin.include_role:
+        name: wg_to_vxlan.ovirt_l2.overlay
+        tasks_from: preflight
+    - name: Prepare a dedicated WireGuard identity on each endpoint
+      ansible.builtin.include_role:
+        name: wg_to_vxlan.ovirt_l2.wireguard
+        tasks_from: identity
+    - name: Exchange the public identities over the controller connections
+      ansible.builtin.set_fact:
+        fabric_peer_public_key: "{{ hostvars[_fabric_peer.host].fabric_local_public_key }}"
+    - name: Confirm that the peer key came from the other endpoint
+      ansible.builtin.assert:
+        that: fabric_peer_public_key == hostvars[_fabric_peer.host].fabric_local_public_key
+    - name: Configure the tunnel
+      ansible.builtin.include_role:
+        name: wg_to_vxlan.ovirt_l2.wireguard
+    - name: Permit the two tunnel endpoints
+      ansible.builtin.include_role:
+        name: wg_to_vxlan.ovirt_l2.firewall
+    - name: Attach the VXLAN bridge port
+      ansible.builtin.include_role:
+        name: wg_to_vxlan.ovirt_l2.overlay
+    - name: Check the installed network
+      ansible.builtin.include_role:
+        name: wg_to_vxlan.ovirt_l2.verify
+      when: not ansible_check_mode

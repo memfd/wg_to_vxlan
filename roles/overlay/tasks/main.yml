@@ -1,0 +1,33 @@
+---
+- name: Validate the selected existing Linux bridge
+  ansible.builtin.include_tasks: preflight.yml
+
+- name: Install and reconcile the selected VXLAN
+  when: not ansible_check_mode
+  block:
+    - name: Install reviewed overlay files under a host-local lock
+      ansible.builtin.include_tasks: assets.yml
+      vars:
+        _fabric_asset_action: install-assets
+
+    - name: Read NetworkManager configuration before creating a tunnel port
+      ansible.builtin.command:
+        argv: [nmcli, general, reload, conf]
+      changed_when: false
+
+    - name: Reconcile the owned VXLAN without restarting the bridge
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - /usr/local/libexec/wg-to-vxlan-overlay.py
+          - sync
+          - "/etc/wg-to-vxlan/overlay/{{ fabric_vxlan_interface }}.json"
+      register: _fabric_overlay_sync
+      changed_when: _fabric_overlay_sync.rc == 0 and (_fabric_overlay_sync.stdout | from_json).changed
+
+    - name: Start periodic reconciliation and enable it at boot
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+        name: "wg-to-vxlan-overlay-{{ fabric_vxlan_interface }}.timer"
+        enabled: true
+        state: started

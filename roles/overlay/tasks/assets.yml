@@ -1,0 +1,28 @@
+---
+- name: Validate or create the per-port boot configuration
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - "{{ lookup('ansible.builtin.file', role_path ~ '/files/overlay.py') }}"
+      - "{{ _fabric_asset_action }}"
+      - '-'
+    stdin: "{{ _fabric_asset_input | to_json }}"
+  vars:
+    _fabric_asset_input:
+      config: "{{ _fabric_overlay }}"
+      helper: "{{ lookup('ansible.builtin.file', role_path ~ '/files/overlay.py', rstrip=false) }}"
+      service: "{{ lookup('ansible.builtin.template', role_path ~ '/templates/service.j2') }}"
+      timer: "{{ lookup('ansible.builtin.template', role_path ~ '/templates/timer.j2') }}"
+      networkmanager: "{{ lookup('ansible.builtin.template', role_path ~ '/templates/networkmanager.j2') }}"
+  register: _fabric_asset_result
+  failed_when: false
+  changed_when: _fabric_asset_result.rc == 0 and (_fabric_asset_result.stdout | from_json).changed
+  no_log: true
+  check_mode: false
+  when: _fabric_asset_action == 'check-assets' or (not ansible_check_mode and _fabric_asset_action == 'install-assets')
+
+- name: Report boot configuration conflicts
+  ansible.builtin.assert:
+    that: _fabric_asset_result.rc == 0
+    fail_msg: "{{ _fabric_asset_result.stderr | default('Could not inspect overlay files') }}"

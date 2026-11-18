@@ -1,0 +1,65 @@
+---
+- name: Validate target platform and require both endpoints in this run
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family == 'RedHat'
+      - ansible_facts.distribution_major_version == '9'
+      - groups.ovirt_fabric | length == 2
+      - ansible_play_hosts_all | sort == groups.ovirt_fabric | sort
+- name: Resolve the other endpoint using only this inventory
+  ansible.builtin.set_fact:
+    _fabric_peer: "{{ groups.ovirt_fabric | wg_to_vxlan.ovirt_l2.peer_settings(hostvars, inventory_hostname) }}"
+    _fabric_config:
+      uplink: "{{ fabric_public_interface }}"
+      bridge: "{{ fabric_bridge }}"
+      wg: "{{ fabric_wg_interface }}"
+      vxlan: "{{ fabric_vxlan_interface }}"
+      wg_port: "{{ fabric_wg_port }}"
+      vxlan_port: "{{ fabric_vxlan_port }}"
+      vni: "{{ fabric_vni }}"
+      wg_mtu: "{{ fabric_wg_mtu }}"
+      inner_mtu: "{{ fabric_inner_mtu }}"
+      probe: "{{ fabric_l2_probe_address }}"
+- name: Validate local configuration and matching transport settings
+  ansible.builtin.assert:
+    that:
+      - _fabric_config | wg_to_vxlan.ovirt_l2.valid_config
+      - _fabric_config[item] == hostvars[_fabric_peer.host]._fabric_config[item]
+  loop: [wg_port, vxlan_port, vni, wg_mtu, inner_mtu]
+- name: Set the numeric peer endpoint and tunnel address
+  ansible.builtin.set_fact:
+    fabric_peer_public_ipv4: "{{ _fabric_peer.public }}"
+    fabric_peer_wg_address: "{{ _fabric_peer.tunnel }}"
+- name: Verify derived peer addresses before consuming them
+  ansible.builtin.assert:
+    that:
+      - fabric_peer_public_ipv4 == _fabric_peer.public
+      - fabric_peer_wg_address == _fabric_peer.tunnel
+- name: Read the public interface and route to the remote endpoint
+  ansible.builtin.command:
+    argv: "{{ item }}"
+  check_mode: false
+  changed_when: false
+  loop:
+    - [ip, -j, -4, addr, show, dev, "{{ fabric_public_interface }}"]
+    - [ip, -j, -4, route, get, "{{ fabric_peer_public_ipv4 }}", from, "{{ fabric_public_ipv4 }}"]
+    - [ip, -j, -4, route, get, "{{ fabric_peer_public_ipv4 }}"]
+    - [ip, -j, -d, link, show, dev, "{{ fabric_bridge }}"]
+    - [firewall-cmd, --state]
+  register: _fabric_network
+- name: Require an addressed public path and a compatible existing Linux bridge
+  ansible.builtin.assert:
+    that:
+      - fabric_public_ipv4 in (uplink.addr_info | map(attribute='local') | list)
+      - uplink.mtu >= fabric_wg_mtu + 60
+      - route.dev == fabric_public_interface
+      - unbound.dev == fabric_public_interface and unbound.prefsrc | default('') == fabric_public_ipv4
+      - bridge.linkinfo.info_kind == 'bridge' and 'UP' in bridge.flags
+      - bridge.mtu == fabric_inner_mtu
+      - bridge.linkinfo.info_data.vlan_filtering | default(0) | int == 0
+    fail_msg: Check the fixed local IPv4, the actual public egress path, bridge type, and MTU before deployment.
+  vars:
+    uplink: "{{ (_fabric_network.results[0].stdout | from_json) | first }}"
+    route: "{{ (_fabric_network.results[1].stdout | from_json) | first }}"
+    unbound: "{{ (_fabric_network.results[2].stdout | from_json) | first }}"
+    bridge: "{{ (_fabric_network.results[3].stdout | from_json) | first }}"

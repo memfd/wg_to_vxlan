@@ -1,0 +1,15 @@
+---
+- name: Check both deployed endpoints
+  hosts: ovirt_fabric
+  become: true
+  strategy: linear
+  any_errors_fatal: true
+  gather_facts: true
+  tasks:
+    - name: Check inventory, uplink and bridge
+      ansible.builtin.import_role:
+        name: wg_to_vxlan.ovirt_l2.preflight
+        public: true
+    - name: Verify tunnel and overlay
+      ansible.builtin.include_role:
+        name: wg_to_vxlan.ovirt_l2.verify

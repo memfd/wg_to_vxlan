@@ -1,0 +1,11 @@
+# Managed by wg_to_vxlan.ovirt_l2 for {{ fabric_vxlan_interface }}.
+[Unit]
+Description=Check the {{ fabric_vxlan_interface }} VXLAN bridge port
+
+[Timer]
+OnBootSec=10s
+OnUnitInactiveSec=30s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

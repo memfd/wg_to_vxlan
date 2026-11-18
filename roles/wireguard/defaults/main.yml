@@ -1,0 +1,4 @@
+---
+fabric_wg_interface: wgfabric0
+fabric_wg_port: 51820
+fabric_wg_mtu: 1440

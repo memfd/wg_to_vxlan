@@ -1,0 +1,49 @@
+---
+- name: Verify scoped firewall rules and bindings
+  ansible.builtin.include_role:
+    name: wg_to_vxlan.ovirt_l2.firewall
+  vars:
+    _fabric_firewall_operation: verify
+- name: Check the local bridge port and VXLAN parameters
+  ansible.builtin.include_role:
+    name: wg_to_vxlan.ovirt_l2.overlay
+    tasks_from: verify
+- name: Read both running public keys
+  ansible.builtin.command:
+    argv: [wg, show, "{{ fabric_wg_interface }}", public-key]
+  register: _fabric_verify_key
+  changed_when: false
+  check_mode: false
+- name: Require the WireGuard endpoint to carry private traffic
+  ansible.builtin.command:
+    argv: [ping, -4, -n, -c, '2', -W, '3', -I, "{{ fabric_wg_interface }}", "{{ fabric_peer_wg_address }}"]
+  register: _fabric_ping
+  retries: 3
+  delay: 2
+  until: _fabric_ping.rc == 0
+  changed_when: false
+  check_mode: false
+- name: Read recent authenticated peer activity
+  ansible.builtin.command:
+    argv: [wg, show, "{{ fabric_wg_interface }}", latest-handshakes]
+  changed_when: false
+  check_mode: false
+  register: _fabric_handshake
+- name: Read the endpoint clock after the probe
+  ansible.builtin.command:
+    argv: [date, '+%s']
+  changed_when: false
+  check_mode: false
+  register: _fabric_clock
+- name: Verify peer identity and handshake age
+  ansible.builtin.assert:
+    that:
+      - _fabric_handshake.stdout.split() | length == 2
+      - _fabric_handshake.stdout.split()[0] == hostvars[_fabric_peer.host]._fabric_verify_key.stdout
+      - 0 <= (_fabric_clock.stdout | int) - (_fabric_handshake.stdout.split()[1] | int) <= 180
+- name: Probe a specified remote bridge or guest address at the full inner MTU
+  ansible.builtin.command:
+    argv: [ping, -4, -n, -c, '3', -W, '3', -M, do, -s, "{{ (fabric_inner_mtu - 28) | string }}", -I, "{{ fabric_bridge }}", "{{ fabric_l2_probe_address }}"]
+  changed_when: false
+  check_mode: false
+  when: fabric_l2_probe_address | length > 0

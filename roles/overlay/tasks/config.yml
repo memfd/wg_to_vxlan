@@ -1,0 +1,15 @@
+---
+- name: Build the overlay configuration
+  ansible.builtin.set_fact:
+    _fabric_overlay:
+      owner: wg_to_vxlan.ovirt_l2
+      bridge: "{{ fabric_bridge }}"
+      wg: "{{ fabric_wg_interface }}"
+      vx: "{{ fabric_vxlan_interface }}"
+      uplink: "{{ fabric_public_interface }}"
+      local: "{{ fabric_wg_address }}"
+      remote: "{{ fabric_peer_wg_address }}"
+      mtu: "{{ fabric_inner_mtu }}"
+      wg_mtu: "{{ fabric_wg_mtu }}"
+      vni: "{{ fabric_vni }}"
+      port: "{{ fabric_vxlan_port }}"

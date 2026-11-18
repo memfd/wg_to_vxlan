@@ -1,0 +1,6 @@
+/dist/
+/build/
+/.venv/
+*.local.yml
+__pycache__/
+*.pyc

@@ -1,0 +1,21 @@
+namespace: wg_to_vxlan
+name: ovirt_l2
+version: 1.0.0
+readme: README.md
+authors:
+  - wg_to_vxlan.ovirt_l2 contributors
+description: Connect Linux bridges on two oVirt hosts using VXLAN over IPv4 WireGuard.
+license: [MIT]
+tags: [ovirt, networking, wireguard, vxlan, linux]
+dependencies: {}
+build_ignore:
+  - .git
+  - .github
+  - .gitignore
+  - dist
+  - build
+  - .venv
+  - '*.local.yml'
+  - '__pycache__'
+  - '**/__pycache__'
+  - '**/*.pyc'

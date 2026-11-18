@@ -1,0 +1,11 @@
+# Managed by wg_to_vxlan.ovirt_l2 for {{ fabric_vxlan_interface }}.
+[Unit]
+Description=Reconcile the {{ fabric_vxlan_interface }} VXLAN bridge port
+After=network-online.target NetworkManager.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/libexec/wg-to-vxlan-overlay.py sync /etc/wg-to-vxlan/overlay/{{ fabric_vxlan_interface }}.json
+StandardOutput=null
+StandardError=journal

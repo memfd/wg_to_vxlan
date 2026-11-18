@@ -1,0 +1,7 @@
+---
+fabric_vxlan_interface: vxfabric0
+fabric_wg_interface: wgfabric0
+fabric_inner_mtu: 1390
+fabric_wg_mtu: 1440
+fabric_vni: 1000
+fabric_vxlan_port: 4789
